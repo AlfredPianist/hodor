@@ -1,11 +1,15 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-"""Hodor voting contest: level 0
+"""Hodor voting contest: level 1
 
 Script that votes exactly 'votes_total' times for a given ID.
 
-Using the 'requests' module, this task requires to send as POST
-the ID and 'holdthedoor' fields for which to properly tally a vote.
+Using the 'requests' module, this task requires to send as POST the ID, the
+'holdthedoor' fields for which to properly tally a vote, and a key field from
+the form hidden from view.
+
+It generates a valid User-Agent from the user_agent module and pushes it into
+the HTTP request headers to validate the vote.
 
 It also uses the 're' module searching the number of votes from a given ID,
 and 'islice' from 'itertools' for the regex to find only 2 numeric instances
@@ -13,13 +17,18 @@ and 'islice' from 'itertools' for the regex to find only 2 numeric instances
 """
 
 import requests
+import user_agent
 import re
 from itertools import islice
 
-votes_total = 1024
+votes_total = 4096
 
-url = "http://158.69.76.135/level0.php"
-search_votes = requests.get(url)
+url = "http://158.69.76.135/level1.php"
+user_ag = {'user-agent': user_agent.generate_user_agent()}
+session = requests.Session()
+session.headers.update(user_ag)
+
+search_votes = session.get(url, headers=user_ag)
 if search_votes.status_code != 200:
     print("Couldn't connect to the website. Try again later.")
     exit(1)
@@ -63,8 +72,16 @@ Select another ID.".format(votes_total))
 votes_ok, votes_fail = 0, 0
 while (votes + votes_ok < votes_total and votes_fail < 50):
     try:
-        post = requests.post(url+"/post", data=payload)
-        if post.status_code == 200 and "I voted!" in post.text:
+        search_key = session.get(url, headers=user_ag)
+        content = search_key.text
+        index_key = content.index("value=") + 7
+        payload['key'] = content[index_key:index_key + 40]
+    except ValueError:
+        print("Couldn't fetch key.")
+        votes_fail += 1
+    try:
+        post = session.post(url, data=payload)
+        if post.status_code == 200:
             votes_ok += 1
             print("+1 vote. Total votes = {:d}.".format(votes + votes_ok))
     except Exception as exc:
